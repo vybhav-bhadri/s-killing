@@ -1,9 +1,13 @@
 from flask import Flask, jsonify, request,session
+import requests, os, uuid, json
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from werkzeug.utils import secure_filename
 import os
+from translate import recognize
 
+os.environ["SPEECH_KEY"] = "4af8779daf30476bbeb2b01f810e8fa7"
+os.environ["SPEECH_REGION"] = "centralindia"
 
 ALLOWED_EXTENSIONS = set(['wav'])
 
@@ -17,6 +21,7 @@ app = Flask(__name__)
 # Set up SQLAlchemy and Marshmallow
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'uploads'
 db = SQLAlchemy(app)
 
 ma = Marshmallow(app)
@@ -26,7 +31,7 @@ class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(50))
     title = db.Column(db.String(100))
-    description = db.Column(db.String(500),)
+    description = db.Column(db.String(500))
     filePath = db.Column(db.String(200))
     languages = db.Column(db.String(100))
     translations = db.relationship('CardTranslation', backref='card', lazy=True)
@@ -102,6 +107,9 @@ def add_card():
     languages = request.json['languages']
     
     new_card = Card(type, title, description, filePath, languages)
+
+    # if(languages.len()>0):
+    #     translator(new_card)
 
     db.session.add(new_card)
     db.session.commit()
@@ -314,8 +322,49 @@ def upload_file():
     else:
         return jsonify({'error': 'Failed to upload file.'}), 500
 
+# def getLanguage(languages):
+#     language_list = languages.split(",")
+#     return language_list
+
+# def translator(card:Card):
+#     lang_list = getLanguage(card.languages)
+#     type = card.type
+#     id = card.id
+#     if(type=="text"):
+#         pass
+
+# def language_text_translation(lang_list,card:Card):
+#     key = os.environ['KEY']
+#     endpoint = os.environ['ENDPOINT']
+#     location = os.environ['LOCATION']
+#     path = '/translate?api-version=3.0'
+#     target_language_parameter = '&to=' + card.languages
+#     constructed_url = endpoint + path + target_language_parameter
+
+#     headers = {
+#         'Ocp-Apim-Subscription-Key': key,
+#         'Ocp-Apim-Subscription-Region': location,
+#         'Content-type': 'application/json',
+#         'X-ClientTraceId': str(uuid.uuid4())
+#     }
+
+#     original_title = card.title
+#     original_desc = card.description
+
+#     body = [{ 'text': original_title }]
+
+#     # Make the call using post
+#     translator_request = requests.post(constructed_url, headers=headers, json=body)
+#     # Retrieve the JSON response
+#     translator_response = translator_request.json()
+#     # Retrieve the translation
+#     translated_text = translator_response[0]['translations'][0]['text']
+
+#     for i in lang_list:
+#         original_title = card.title
+#         original_desc = card.description
 
 # Run the server
 if __name__ == '__main__':
-    app.config['UPLOAD_FOLDER'] = './uploads'
     app.run(debug=True)
+
