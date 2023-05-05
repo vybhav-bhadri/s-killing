@@ -1,7 +1,14 @@
 from flask import Flask, jsonify, request,session
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
+from werkzeug.utils import secure_filename
 import os
+
+
+ALLOWED_EXTENSIONS = set(['wav'])
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.',1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -19,7 +26,7 @@ class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(50))
     title = db.Column(db.String(100))
-    description = db.Column(db.String(500))
+    description = db.Column(db.String(500),)
     filePath = db.Column(db.String(200))
     languages = db.Column(db.String(100))
     translations = db.relationship('CardTranslation', backref='card', lazy=True)
@@ -287,8 +294,28 @@ def delete_language(id):
 
     return language_schema.jsonify(language)
 
+@app.route('/media/upload',methods=['POST'])
+def upload_file():
+    # check if the post request has the file part
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request.'}), 400
+
+    file = request.files['file']
+
+    # if user does not select file, browser also submit an empty part without filename
+    if file.filename == '':
+        return jsonify({'error': 'No file selected.'}), 400
+
+    if file and allowed_file(file.filename):
+        filename = file.filename
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        return jsonify({'file_path': filepath}), 200
+    else:
+        return jsonify({'error': 'Failed to upload file.'}), 500
 
 
 # Run the server
 if __name__ == '__main__':
+    app.config['UPLOAD_FOLDER'] = './uploads'
     app.run(debug=True)
