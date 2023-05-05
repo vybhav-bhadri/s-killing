@@ -321,6 +321,12 @@ def upload_file():
         return jsonify({'file_path': filepath}), 200
     else:
         return jsonify({'error': 'Failed to upload file.'}), 500
+    
+# translate speech
+@app.route('/translate/speech', methods=['GET'])
+def translate_speech():
+    text = recognize()
+    return (text)
 
 # def getLanguage(languages):
 #     language_list = languages.split(",")
@@ -338,9 +344,7 @@ def upload_file():
 #     endpoint = os.environ['ENDPOINT']
 #     location = os.environ['LOCATION']
 #     path = '/translate?api-version=3.0'
-#     target_language_parameter = '&to=' + card.languages
-#     constructed_url = endpoint + path + target_language_parameter
-
+    
 #     headers = {
 #         'Ocp-Apim-Subscription-Key': key,
 #         'Ocp-Apim-Subscription-Region': location,
@@ -351,18 +355,23 @@ def upload_file():
 #     original_title = card.title
 #     original_desc = card.description
 
-#     body = [{ 'text': original_title }]
+#     for ln in lang_list:
+#         target_language_parameter = '&to=' + ln
+#         constructed_url = endpoint + path + target_language_parameter
 
-#     # Make the call using post
-#     translator_request = requests.post(constructed_url, headers=headers, json=body)
-#     # Retrieve the JSON response
-#     translator_response = translator_request.json()
-#     # Retrieve the translation
-#     translated_text = translator_response[0]['translations'][0]['text']
+#         body_title = [{ 'text': original_title }]
+#         body_desc = [{'text':original_desc}]
 
-#     for i in lang_list:
-#         original_title = card.title
-#         original_desc = card.description
+#         # Make the call using post
+#         translator_request_title = requests.post(constructed_url, headers=headers, json=body_title)
+#         translator_request_desc = requests.post(constructed_url, headers=headers, json=body_desc)
+#         # Retrieve the JSON response
+#         translator_response = translator_request_title.json()
+#         translator_response = translator_request_desc.json()
+#         # Retrieve the translation
+#         translated_title = translator_response[0]['translations'][0]['text']
+
+    
 
 # Run the server
 if __name__ == '__main__':
