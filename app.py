@@ -2,6 +2,13 @@ from flask import Flask, jsonify, request,session
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 import os
+from translate import recognize
+
+
+os.environ["SPEECH_KEY"] = "4af8779daf30476bbeb2b01f810e8fa7"
+os.environ["SPEECH_REGION"] = "centralindia"
+
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -286,6 +293,14 @@ def delete_language(id):
     db.session.commit()
 
     return language_schema.jsonify(language)
+
+
+
+# translate speech
+@app.route('/translate/speech', methods=['GET'])
+def translate_speech():
+    text = recognize()
+    return (text)
 
 
 
