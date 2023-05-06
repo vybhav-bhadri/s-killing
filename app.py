@@ -4,7 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from werkzeug.utils import secure_filename
 import os
-from translate import recognize
+# from translate import recognize
+import sqlite3
 
 os.environ["SPEECH_KEY"] = "4af8779daf30476bbeb2b01f810e8fa7"
 os.environ["SPEECH_REGION"] = "centralindia"
@@ -85,6 +86,19 @@ class LanguageSchema(ma.Schema):
     class Meta:
         fields = ('id', 'languageId', 'languageName')
 
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, CardTranslation):
+            return {
+                'id': o.id,
+                'card_id': o.card_id,
+                'title_translation': o.title_translation,
+                'description_translation': o.description_translation,
+                'audio_translation': o.audio_translation,
+                'language_id': o.language_id,
+                'language': o.language.language_name
+            }
+        return super().default(o)
 
 card_schema = CardSchema()
 cards_schema = CardSchema(many=True)
@@ -108,18 +122,20 @@ def add_card():
     
     new_card = Card(type, title, description, filePath, languages)
 
-    # if(languages.len()>0):
-    #     translator(new_card)
-
     db.session.add(new_card)
     db.session.commit()
 
+    if(len(languages)>0):
+        translator(new_card)
+
+    card_schema = CardSchema(exclude=['translations'])
     return card_schema.jsonify(new_card)
 
 # Get all cards
 @app.route('/cards', methods=['GET'])
 def get_cards():
     all_cards = Card.query.all()
+    cards_schema = CardSchema(many=True, exclude=['translations'])
     result = cards_schema.dump(all_cards)
 
     return jsonify(result)
@@ -128,8 +144,22 @@ def get_cards():
 @app.route('/cards/<id>', methods=['GET'])
 def get_card(id):
     card = Card.query.get(id)
-
-    return card_schema.jsonify(card)
+    if not card:
+        return jsonify({'error': 'Card not found'})
+    translations = []
+    for translation in card.translations:
+        translation_dict = translation.__dict__
+        del translation_dict['_sa_instance_state']  # remove SQLAlchemy state
+        translations.append(translation_dict)
+    return jsonify({
+        'id': card.id,
+        'type': card.type,
+        'title': card.title,
+        'description': card.description,
+        'filePath': card.filePath,
+        'languages': card.languages.split(','),
+        'translations': translations,
+    })
 
 # Update a card
 @app.route('/cards/<id>', methods=['PUT'])
@@ -277,6 +307,12 @@ def get_language(id):
 
     return language_schema.jsonify(language)
 
+def get_language_id_by_language_name(languageId):
+    language = Language.query.filter_by(languageId=languageId).first()
+    if language:
+        return language.id
+    return None
+
 # Update a language
 @app.route('/languages/<id>', methods=['PUT'])
 def update_language(id):
@@ -323,55 +359,68 @@ def upload_file():
         return jsonify({'error': 'Failed to upload file.'}), 500
     
 # translate speech
-@app.route('/translate/speech', methods=['GET'])
-def translate_speech():
-    text = recognize()
-    return (text)
+# @app.route('/translate/speech', methods=['GET'])
+# def translate_speech():
+#     text = recognize()
+#     return (text)
 
-# def getLanguage(languages):
-#     language_list = languages.split(",")
-#     return language_list
+def getLanguage(languages):
+    language_list = languages.split(",")
+    return language_list
 
-# def translator(card:Card):
-#     lang_list = getLanguage(card.languages)
-#     type = card.type
-#     id = card.id
-#     if(type=="text"):
-#         pass
+def translator(card:Card):
+    lang_list = getLanguage(card.languages)
+    print(lang_list)
+    if(card.type=="text"):
+        language_text_translation(lang_list,card)
 
-# def language_text_translation(lang_list,card:Card):
-#     key = os.environ['KEY']
-#     endpoint = os.environ['ENDPOINT']
-#     location = os.environ['LOCATION']
-#     path = '/translate?api-version=3.0'
+def language_text_translation(lang_list,card:Card):
+    # key = os.environ['KEY']
+    # endpoint = os.environ['ENDPOINT']
+    # location = os.environ['LOCATION']
+    key = "4af8779daf30476bbeb2b01f810e8fa7"
+    endpoint = "https://api.cognitive.microsofttranslator.com/"
+    location = "centralindia"
+    path = '/translate?api-version=3.0'
     
-#     headers = {
-#         'Ocp-Apim-Subscription-Key': key,
-#         'Ocp-Apim-Subscription-Region': location,
-#         'Content-type': 'application/json',
-#         'X-ClientTraceId': str(uuid.uuid4())
-#     }
+    headers = {
+        'Ocp-Apim-Subscription-Key': key,
+        'Ocp-Apim-Subscription-Region': location,
+        'Content-type': 'application/json',
+        'X-ClientTraceId': str(uuid.uuid4())
+    }
 
-#     original_title = card.title
-#     original_desc = card.description
+    original_title = card.title
+    original_desc = card.description
 
-#     for ln in lang_list:
-#         target_language_parameter = '&to=' + ln
-#         constructed_url = endpoint + path + target_language_parameter
+    for ln in lang_list:
+        target_language_parameter = '&to=' + ln
+        constructed_url = endpoint + path + target_language_parameter
 
-#         body_title = [{ 'text': original_title }]
-#         body_desc = [{'text':original_desc}]
+        body_title = [{ 'text': original_title }]
+        body_desc = [{'text':original_desc}]
 
-#         # Make the call using post
-#         translator_request_title = requests.post(constructed_url, headers=headers, json=body_title)
-#         translator_request_desc = requests.post(constructed_url, headers=headers, json=body_desc)
-#         # Retrieve the JSON response
-#         translator_response = translator_request_title.json()
-#         translator_response = translator_request_desc.json()
-#         # Retrieve the translation
-#         translated_title = translator_response[0]['translations'][0]['text']
+        # Make the call using post
+        translator_request_title = requests.post(constructed_url, headers=headers, json=body_title)
+        translator_request_desc = requests.post(constructed_url, headers=headers, json=body_desc)
+        # Retrieve the JSON response
+        translator_response_title = translator_request_title.json()
+        translator_response_desc = translator_request_desc.json()
+        # Retrieve the translation
+        translated_title = translator_response_title[0]['translations'][0]['text']
+        translated_desc = translator_response_desc[0]['translations'][0]['text']
 
-    
+        cardId = card.id
+        title_translation = translated_title
+        description_translation = translated_desc
+        audio_translation = ""
+        language_id = get_language_id_by_language_name(ln)
+
+        new_card_translation = CardTranslation(cardId, title_translation, description_translation, audio_translation,language_id)
+        print(new_card_translation)
+        db.session.add(new_card_translation)
+        db.session.commit()
+
 
 # Run the server
 if __name__ == '__main__':
